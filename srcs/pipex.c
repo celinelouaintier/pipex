@@ -13,6 +13,7 @@
 #include "pipex.h"
 
 // TODO : creer deux enfants
+// --trace-children=yes --track-fds=yes ./pipex
 void	exec(char *cmd, char *envp[])
 {
   char  **av;
@@ -29,9 +30,8 @@ void	exec(char *cmd, char *envp[])
   }
 }
 
-void	process_pipes(char	*cmd, char *envp[], char **av, int ac)
+void	process_pipes(char	*cmd, char *envp[])
 {
-	int		fd;
 	pid_t	parent; //stock des identifiants de processus (PID) pour reconnaître le fils du père (c'est la fonction fork() qui renvoie le pid)
 	int		pipe_fd[2]; //tableau pour contenir les deux fd créés par pipe(). end[0](parent) pour lire dans le pipe / end[1](fils) pour écrire dans le pipe
 
@@ -40,17 +40,13 @@ void	process_pipes(char	*cmd, char *envp[], char **av, int ac)
 	if (!parent) // fork = 0 DONC process fils	
 	{
 		close(pipe_fd[0]); //ferme le bout de lecture non utilisé (parent)
-		fd = open(av[1], O_RDONLY);
 		dup2(pipe_fd[1], STDOUT_FILENO); // redirige la sortie qui est normalement sur la console, dans le pipe
-		dup2(fd, STDIN_FILENO); // redirige l'entree standard (ce que j'ecris dans le terminal) vers fd ()
 		exec(cmd, envp);
 	}
 	else
 	{
 		close(pipe_fd[1]);
-		fd = open(av[ac - 1], O_WRONLY | O_CREAT | O_TRUNC, 0644);
 		dup2(pipe_fd[0], STDIN_FILENO); // prend la donnee du pipe
-		dup2(fd, STDOUT_FILENO); // change la sortie vers le second fd
 		waitpid(parent, NULL, 0);
 	}
 }
@@ -60,14 +56,20 @@ void	process_pipes(char	*cmd, char *envp[], char **av, int ac)
 int main(int ac, char **av, char *envp[])
 {
 	int		i;
+	int		fdin;
+	int		fdout;
     
 	i = 3;
     if (ac >= 5)
     {
-		process_pipes(av[2], envp, av, ac);
+		fdin = open(av[1], O_RDONLY);
+		fdout = open(av[ac - 1], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		dup2(fdin, STDIN_FILENO); // redirige l'entree standard (ce que j'ecris dans le terminal) vers fd ()
+		dup2(fdout, STDOUT_FILENO); // change la sortie vers le second fd
+		process_pipes(av[2], envp);
 		while (i < ac - 2)
 		{
-			process_pipes(av[i], envp, av, ac);
+			process_pipes(av[i], envp);
 			i++;
         }
 		exec(av[i], envp);
